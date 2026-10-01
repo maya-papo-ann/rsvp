@@ -1,11 +1,16 @@
 // Runs INSIDE the iplan RSVP tab (Claude in Chrome javascript_tool). Fetches every guest, parses, downloads rsvp-guests.json.
 const tok = document.querySelector('meta[name=csrf-token]').content;
-const body = {bs_grid_data_source:{paging:{curr_page:1,per_page:1000,bound:null},uid:"client.event.rsvp.service.package_invitations_data_source",applied_view_id:null,sorting:[{uid:"invitation.title",direction:"asc"}],filtering:{},facet_uid:"default"},bs_grid_options:{active_layout:"list"},load_components:["table","paging","applied_filters"]};
-const r = await fetch(location.pathname + '/package_invitations',{method:'POST',headers:{'X-CSRF-Token':tok,'Content-Type':'application/json','Accept':'application/json, text/javascript, */*; q=0.01','X-Http-Method-Override':'GET','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)});
-if (r.status !== 200) throw new Error('iplan returned ' + r.status);
-const j = await r.json();
-const d = new DOMParser().parseFromString(j.html.table,'text/html');
-const rows = [...d.body.children].filter(e=>e.classList.contains('d-flex'));
+// iplan caps a page at 300 rows (asking for more silently returns 10), so page through until every row is in
+let rows = [], page = 1, total = 1, j;
+while (rows.length < total && page < 10) {
+  const body = {bs_grid_data_source:{paging:{curr_page:page,per_page:300,bound:null},uid:"client.event.rsvp.service.package_invitations_data_source",applied_view_id:null,sorting:[{uid:"invitation.title",direction:"asc"}],filtering:{},facet_uid:"default"},bs_grid_options:{active_layout:"list"},load_components:["table","paging","applied_filters"]};
+  const r = await fetch(location.pathname + '/package_invitations',{method:'POST',headers:{'X-CSRF-Token':tok,'Content-Type':'application/json','Accept':'application/json, text/javascript, */*; q=0.01','X-Http-Method-Override':'GET','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)});
+  if (r.status !== 200) throw new Error('iplan returned ' + r.status);
+  j = await r.json(); total = j.pagination_info.total_rows;
+  const d = new DOMParser().parseFromString(j.html.table,'text/html');
+  rows.push(...[...d.body.children].filter(e=>e.classList.contains('d-flex')));
+  page++;
+}
 const T = e => e ? e.textContent.replace(/\s+/g,' ').trim() : '';
 const guests = rows.map(row=>{
   const left=row.children[0];
