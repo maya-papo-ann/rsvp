@@ -4,5 +4,5 @@ Guest RSVP dashboard for Maya & Eshed (16.10.2026). The page decrypts `data.enc`
 
 - `index.html` - the dashboard (GitHub Pages)
 - `data.enc` - AES-GCM encrypted `{updatedAt, guests, changes}`
-- `scrape.js` - runs inside the iplan RSVP tab, downloads `rsvp-guests.json`
-- `sync.mjs` - `node sync.mjs ~/Downloads/rsvp-guests.json` diffs, logs changes, re-encrypts, commits and pushes
+- `scrape.js` - runs inside the iplan RSVP tab and prints the guest JSON into the page (read it back with get_page_text, save as `incoming.json`)
+- `sync.mjs` - `node sync.mjs incoming.json` diffs, logs changes, re-encrypts, commits and pushes

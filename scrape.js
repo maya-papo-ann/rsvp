@@ -1,4 +1,5 @@
-// Runs INSIDE the iplan RSVP tab (Claude in Chrome javascript_tool). Fetches every guest, parses, downloads rsvp-guests.json.
+// Runs INSIDE the iplan RSVP tab (Claude in Chrome javascript_tool). Fetches every guest, parses, and replaces the page body with the JSON
+// between GUESTS_JSON_START / GUESTS_JSON_END markers, so get_page_text can read it (Chrome drops programmatic downloads from injected scripts).
 const tok = document.querySelector('meta[name=csrf-token]').content;
 // iplan caps a page at 300 rows (asking for more silently returns 10), so page through until every row is in
 let rows = [], page = 1, total = 1, j;
@@ -28,5 +29,5 @@ const guests = rows.map(row=>{
   return {name,phone,side,group,invited,service,sent,status,coming,notes};
 });
 if (guests.length !== j.pagination_info.total_rows) throw new Error('parsed ' + guests.length + ' of ' + j.pagination_info.total_rows);
-const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(guests)],{type:'application/json'})); a.download='rsvp-guests.json'; document.body.appendChild(a); a.click();
-`downloaded ${guests.length} guests: ${guests.filter(g=>g.status==='confirmed').length} confirmed, ${guests.filter(g=>g.status==='declined').length} declined, ${guests.filter(g=>g.status==='pending').length} pending`
+const p=document.createElement('pre'); p.textContent='GUESTS_JSON_START\n'+JSON.stringify(guests)+'\nGUESTS_JSON_END'; document.body.innerHTML=''; document.body.appendChild(p);
+`dumped ${guests.length} guests: ${guests.filter(g=>g.status==='confirmed').length} confirmed, ${guests.filter(g=>g.status==='declined').length} declined, ${guests.filter(g=>g.status==='pending').length} pending`
