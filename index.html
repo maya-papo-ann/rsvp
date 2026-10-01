@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>אישורי הגעה · מאיה ואשד</title>
+<style>
+:root{--bg:#f7f3ea;--card:#fffdf8;--ink:#1f2a22;--muted:#6b7570;--line:#e3dccb;--green:#2F5D3F;--sage:#8fae95;--ok:#2F5D3F;--no:#a3452f;--wait:#b7791f;--r:14px}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 2px;color:var(--green)}.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 6px;text-align:center;cursor:pointer}
+.stat b{display:block;font-size:22px}.stat small{color:var(--muted);font-size:12px}.stat.on{outline:2px solid var(--green)}
+.stat.ok b{color:var(--ok)}.stat.no b{color:var(--no)}.stat.wait b{color:var(--wait)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+input,select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+input[type=search]{flex:1 1 180px}select{flex:1 1 120px}
+.count{font-size:13px;color:var(--muted);margin:6px 0 10px}
+.g{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+.g .n{font-weight:600}.g .m{color:var(--muted);font-size:12px}.g a{color:inherit;text-decoration:none}
+.badge{align-self:center;grid-row:span 2;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;color:#fff}
+.badge.confirmed{background:var(--ok)}.badge.declined{background:var(--no)}.badge.pending{background:var(--wait)}
+.notes{grid-column:1/-1;font-size:13px;background:#f1ede1;border-radius:8px;padding:4px 8px;margin-top:4px}
+.new{grid-column:1/-1;font-size:12px;color:var(--green)}
+details{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:14px}
+summary{cursor:pointer;font-weight:600;color:var(--green)}
+.ch{font-size:14px;padding:4px 0;border-bottom:1px dashed var(--line)}.ch:last-child{border:0}.ch time{color:var(--muted);font-size:12px;margin-inline-start:6px}
+#lock{max-width:360px;margin:20vh auto;text-align:center}#lock input{width:100%;margin:10px 0}#lock button{font:inherit;padding:10px 18px;border:0;border-radius:10px;background:var(--green);color:#fff;width:100%}
+.err{color:var(--no);font-size:13px;min-height:18px}
+@media(max-width:420px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<main id="lock"><h1>אישורי הגעה</h1><p class="sub">מאיה ואשד · 16.10.2026</p><form id="lf"><input id="pw" type="password" placeholder="סיסמה" autocomplete="current-password" autofocus><div class="err" id="err"></div><button>כניסה</button></form></main>
+<main id="app" hidden>
+<h1>אישורי הגעה</h1><div class="sub" id="upd"></div>
+<div class="stats" id="stats"></div>
+<details id="changes"><summary>מה השתנה לאחרונה</summary><div id="chl"></div></details>
+<div class="filters"><input id="q" type="search" placeholder="חיפוש שם או טלפון"><select id="side"><option value="">חתן וכלה</option><option>חתן</option><option>כלה</option></select><select id="group"><option value="">כל הקבוצות</option></select><select id="sort"><option value="name">לפי שם</option><option value="recent">שינויים אחרונים קודם</option><option value="group">לפי קבוצה</option></select></div>
+<div class="count" id="cnt"></div>
+<div id="list"></div>
+</main>
+<script>
+const HE={confirmed:'אישרו',declined:'לא מגיעים',pending:'טרם ענו'};
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function decrypt(pass){
+  const f=await fetch('data.enc?'+Date.now(),{cache:'no-store'}).then(r=>r.json());
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(f.salt),iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(f.iv)},k,b64(f.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+let D,status='';
+const $=id=>document.getElementById(id);
+const fmt=iso=>new Date(iso).toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
+function render(){
+  const g=D.guests, q=$('q').value.trim(), side=$('side').value, group=$('group').value, sort=$('sort').value;
+  const lastChange=new Map(); for(const c of D.changes) lastChange.set(c.name,c.at);
+  let rows=g.filter(x=>(!status||x.status===status)&&(!side||x.side.includes(side))&&(!group||x.group===group)&&(!q||x.name.includes(q)||x.phone.replace(/-/g,'').includes(q.replace(/-/g,''))));
+  if(sort==='recent') rows.sort((a,b)=>(lastChange.get(b.name)||'').localeCompare(lastChange.get(a.name)||'')||a.name.localeCompare(b.name,'he'));
+  else if(sort==='group') rows.sort((a,b)=>a.group.localeCompare(b.group,'he')||a.name.localeCompare(b.name,'he'));
+  else rows.sort((a,b)=>a.name.localeCompare(b.name,'he'));
+  const people=rows.reduce((a,x)=>a+x.coming,0), inv=rows.reduce((a,x)=>a+x.invited,0);
+  $('cnt').textContent=`${rows.length} הזמנות · ${inv} מוזמנים · ${people} אישרו הגעה`;
+  const dayAgo=Date.now()-36e5*36;
+  $('list').innerHTML=rows.map(x=>`<div class="g"><div class="n">${x.name}</div><span class="badge ${x.status}">${x.status==='confirmed'?`מגיעים ${x.coming}${x.coming<x.invited?' מתוך '+x.invited:''}`:HE[x.status]}</span><div class="m"><a href="tel:${x.phone}">${x.phone}</a> · ${x.side}${x.group?' · '+x.group:''} · ${x.invited===1?'מוזמן אחד':x.invited+' מוזמנים'}${x.service==='מושהה'?' · שירות מושהה':''}</div>${x.notes?`<div class="notes">${x.notes}</div>`:''}${lastChange.has(x.name)&&new Date(lastChange.get(x.name))>dayAgo?`<div class="new">עודכן ${fmt(lastChange.get(x.name))}</div>`:''}</div>`).join('')||'<p class="count">אין תוצאות</p>';
+}
+function stats(){
+  const g=D.guests,n=s=>g.filter(x=>x.status===s).length,people=g.reduce((a,x)=>a+x.coming,0);
+  $('stats').innerHTML=[['','הזמנות',g.length,''],['confirmed','אישרו · '+people+' אנשים',n('confirmed'),'ok'],['declined','לא מגיעים',n('declined'),'no'],['pending','טרם ענו',n('pending'),'wait']]
+    .map(([s,l,v,c])=>`<div class="stat ${c} ${status===s?'on':''}" data-s="${s}"><b>${v}</b><small>${l}</small></div>`).join('');
+  $('stats').querySelectorAll('.stat').forEach(e=>e.onclick=()=>{status=e.dataset.s;stats();render()});
+}
+function changes(){
+  const c=[...D.changes].reverse().slice(0,60);
+  $('chl').innerHTML=c.length?c.map(x=>`<div class="ch">${x.name}: ${x.from?HE[x.from]+' ← ':'נוספו: '}${HE[x.to]}${x.to==='confirmed'?' ('+x.coming+')':''}<time>${fmt(x.at)}</time></div>`).join(''):'<div class="ch">עדיין אין שינויים מתועדים</div>';
+  $('changes').querySelector('summary').textContent=`מה השתנה לאחרונה (${D.changes.filter(x=>new Date(x.at)>Date.now()-864e5*2).length} בימיים האחרונים)`;
+}
+async function open(pass){
+  D=await decrypt(pass); try{localStorage.rsvpPass=pass}catch{}
+  $('lock').hidden=true;$('app').hidden=false;
+  $('upd').textContent='עודכן '+fmt(D.updatedAt)+' · '+D.guests.length+' הזמנות';
+  const groups=[...new Set(D.guests.map(x=>x.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'he'));
+  $('group').innerHTML='<option value="">כל הקבוצות</option>'+groups.map(g=>`<option>${g}</option>`).join('');
+  ['q','side','group','sort'].forEach(id=>$(id).oninput=render);
+  stats();changes();render();
+}
+$('lf').onsubmit=async e=>{e.preventDefault();$('err').textContent='';try{await open($('pw').value)}catch{$('err').textContent='סיסמה שגויה'}};
+try{ if(localStorage.rsvpPass) open(localStorage.rsvpPass).catch(()=>{}); }catch{}
+</script>
+</body>
+</html>
