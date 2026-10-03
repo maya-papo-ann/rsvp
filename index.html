@@ -12,7 +12,7 @@ main{max-width:760px;margin:0 auto;padding:16px}
 h1{font-size:22px;margin:4px 0 2px;color:var(--green)}.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 6px;text-align:center;cursor:pointer}
-.stat b{display:block;font-size:22px}.stat small{color:var(--muted);font-size:12px}.stat.on{outline:2px solid var(--green)}
+.stat b{display:block;font-size:24px}.stat small{color:var(--muted);font-size:12px;display:block}.stat .sub2{font-size:10px;opacity:.8}.stat.on{outline:2px solid var(--green)}
 .stat.ok b{color:var(--ok)}.stat.no b{color:var(--no)}.stat.wait b{color:var(--wait)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 input,select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
@@ -63,14 +63,15 @@ function render(){
   else if(sort==='group') rows.sort((a,b)=>a.group.localeCompare(b.group,'he')||a.name.localeCompare(b.name,'he'));
   else rows.sort((a,b)=>a.name.localeCompare(b.name,'he'));
   const people=rows.reduce((a,x)=>a+x.coming,0), inv=rows.reduce((a,x)=>a+x.invited,0);
-  $('cnt').textContent=`${rows.length} הזמנות · ${inv} מוזמנים · ${people} אישרו הגעה`;
+  $('cnt').textContent=`${people} אנשים מגיעים · ${inv} מוזמנים · ${rows.length} הזמנות`;
   const dayAgo=Date.now()-36e5*36;
   $('list').innerHTML=rows.map(x=>`<div class="g"><div class="n">${x.name}</div><span class="badge ${x.status}">${x.status==='confirmed'?`מגיעים ${x.coming}${x.coming<x.invited?' מתוך '+x.invited:''}`:HE[x.status]}</span><div class="m"><a href="tel:${x.phone}">${x.phone}</a> · ${x.side}${x.group?' · '+x.group:''} · ${x.invited===1?'מוזמן אחד':x.invited+' מוזמנים'}${x.service==='מושהה'?' · שירות מושהה':''}</div>${x.notes?`<div class="notes">${x.notes}</div>`:''}${lastChange.has(x.name)&&new Date(lastChange.get(x.name))>dayAgo?`<div class="new">עודכן ${fmt(lastChange.get(x.name))}</div>`:''}</div>`).join('')||'<p class="count">אין תוצאות</p>';
 }
 function stats(){
-  const g=D.guests,n=s=>g.filter(x=>x.status===s).length,people=g.reduce((a,x)=>a+x.coming,0);
-  $('stats').innerHTML=[['','הזמנות',g.length,''],['confirmed','אישרו · '+people+' אנשים',n('confirmed'),'ok'],['declined','לא מגיעים',n('declined'),'no'],['pending','טרם ענו',n('pending'),'wait']]
-    .map(([s,l,v,c])=>`<div class="stat ${c} ${status===s?'on':''}" data-s="${s}"><b>${v}</b><small>${l}</small></div>`).join('');
+  const g=D.guests,by=s=>g.filter(x=>x.status===s),inv=a=>a.reduce((n,x)=>n+x.invited,0),com=a=>a.reduce((n,x)=>n+x.coming,0);
+  const coming=com(by('confirmed')), notComing=inv(by('declined'))+inv(by('confirmed'))-coming, pending=inv(by('pending'));
+  $('stats').innerHTML=[['','מוזמנים',inv(g),g.length+' הזמנות',''],['confirmed','מגיעים',coming,by('confirmed').length+' הזמנות אישרו','ok'],['declined','לא מגיעים',notComing,by('declined').length+' סירבו · '+(notComing-inv(by('declined')))+' חסרים ממשפחות שאישרו','no'],['pending','טרם ענו',pending,by('pending').length+' הזמנות','wait']]
+    .map(([s,l,v,sub,c])=>`<div class="stat ${c} ${status===s?'on':''}" data-s="${s}"><b>${v}</b><small>${l}</small><small class="sub2">${sub}</small></div>`).join('');
   $('stats').querySelectorAll('.stat').forEach(e=>e.onclick=()=>{status=e.dataset.s;stats();render()});
 }
 function changes(){
@@ -81,7 +82,7 @@ function changes(){
 async function open(pass){
   D=await decrypt(pass); try{localStorage.rsvpPass=pass}catch{}
   $('lock').hidden=true;$('app').hidden=false;
-  $('upd').textContent='עודכן '+fmt(D.updatedAt)+' · '+D.guests.length+' הזמנות';
+  $('upd').textContent='עודכן '+fmt(D.updatedAt)+' · המספרים הגדולים הם אנשים, הקטנים הזמנות';
   const groups=[...new Set(D.guests.map(x=>x.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'he'));
   $('group').innerHTML='<option value="">כל הקבוצות</option>'+groups.map(g=>`<option>${g}</option>`).join('');
   ['q','side','group','sort'].forEach(id=>$(id).oninput=render);

@@ -21,10 +21,11 @@ const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 2000
 const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify({ updatedAt: at, guests: fresh, changes: log.slice(-300) })));
 const b64 = u => Buffer.from(u).toString('base64');
 fs.writeFileSync('data.enc', JSON.stringify({ salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) }));
-const n = s => fresh.filter(g => g.status === s), people = n('confirmed').reduce((a, g) => a + g.coming, 0);
+const n = s => fresh.filter(g => g.status === s), inv = a => a.reduce((x, g) => x + g.invited, 0), people = n('confirmed').reduce((a, g) => a + g.coming, 0);
+const notComing = inv(n('declined')) + inv(n('confirmed')) - people, pendingPeople = inv(n('pending'));
 const he = { confirmed: 'אישרו', declined: 'סירבו', pending: 'טרם ענו' };
 const lines = changes.map(c => `${c.name}: ${c.from ? he[c.from] + ' ← ' : 'חדש: '}${he[c.to]}${c.to === 'confirmed' ? ` (${c.coming})` : ''}`);
-const summary = `אישרו ${n('confirmed').length} הזמנות (${people} אנשים), סירבו ${n('declined').length}, טרם ענו ${n('pending').length}. שינויים מאז הפעם הקודמת: ${changes.length}${lines.length ? '\n' + lines.join('\n') : ''}`;
+const summary = `מגיעים ${people} אנשים (${n('confirmed').length} הזמנות), לא מגיעים ${notComing}, טרם ענו ${pendingPeople} אנשים (${n('pending').length} הזמנות). שינויים מאז הפעם הקודמת: ${changes.length}${lines.length ? '\n' + lines.join('\n') : ''}`;
 if (process.argv.includes('--no-git')) { console.log(summary); process.exit(0); }
 execSync('git add data.enc && (git diff --cached --quiet || git commit -qm "rsvp sync ' + at.slice(0, 16) + '") && git push -q', { stdio: 'inherit' });
 console.log(summary);
