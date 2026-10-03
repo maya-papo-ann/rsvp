@@ -38,12 +38,12 @@ summary{cursor:pointer;font-weight:600;color:var(--green)}
 <h1>אישורי הגעה</h1><div class="sub" id="upd"></div>
 <div class="stats" id="stats"></div>
 <details id="changes"><summary>מה השתנה לאחרונה</summary><div id="chl"></div></details>
-<div class="filters"><input id="q" type="search" placeholder="חיפוש שם או טלפון"><select id="side"><option value="">חתן וכלה</option><option>חתן</option><option>כלה</option></select><select id="group"><option value="">כל הקבוצות</option></select><select id="sort"><option value="name">לפי שם</option><option value="recent">שינויים אחרונים קודם</option><option value="group">לפי קבוצה</option></select></div>
+<div class="filters"><input id="q" type="search" placeholder="חיפוש שם או טלפון"><select id="side"><option value="">שני הצדדים</option><option>חתן</option><option>כלה</option></select><select id="group"><option value="">כל הקבוצות</option></select><select id="sort"><option value="name">לפי שם</option><option value="recent">שינויים אחרונים קודם</option><option value="group">לפי קבוצה</option></select></div>
 <div class="count" id="cnt"></div>
 <div id="list"></div>
 </main>
 <script>
-const HE={confirmed:'אישרו',declined:'לא מגיעים',pending:'טרם ענו'};
+const HE={confirmed:'מגיעים',declined:'לא מגיעים',pending:'טרם עדכנו'};
 const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 async function decrypt(pass){
   const f=await fetch('data.enc?'+Date.now(),{cache:'no-store'}).then(r=>r.json());
@@ -65,12 +65,13 @@ function render(){
   const people=rows.reduce((a,x)=>a+x.coming,0), inv=rows.reduce((a,x)=>a+x.invited,0);
   $('cnt').textContent=`${people} אנשים מגיעים · ${inv} מוזמנים · ${rows.length} הזמנות`;
   const dayAgo=Date.now()-36e5*36;
-  $('list').innerHTML=rows.map(x=>`<div class="g"><div class="n">${x.name}</div><span class="badge ${x.status}">${x.status==='confirmed'?`מגיעים ${x.coming}${x.coming<x.invited?' מתוך '+x.invited:''}`:HE[x.status]}</span><div class="m"><a href="tel:${x.phone}">${x.phone}</a> · ${x.side}${x.group?' · '+x.group:''} · ${x.invited===1?'מוזמן אחד':x.invited+' מוזמנים'}${x.service==='מושהה'?' · שירות מושהה':''}</div>${x.notes?`<div class="notes">${x.notes}</div>`:''}${lastChange.has(x.name)&&new Date(lastChange.get(x.name))>dayAgo?`<div class="new">עודכן ${fmt(lastChange.get(x.name))}</div>`:''}</div>`).join('')||'<p class="count">אין תוצאות</p>';
+  $('list').innerHTML=rows.map(x=>`<div class="g"><div class="n">${x.name}</div><span class="badge ${x.status}">${x.status==='confirmed'?`מגיעים ${x.coming}${x.coming!==x.invited?' מתוך '+x.invited:''}`:HE[x.status]}</span><div class="m"><a href="tel:${x.phone}">${x.phone}</a> · ${x.side}${x.group?' · '+x.group:''} · ${x.invited===1?'מוזמן אחד':x.invited+' מוזמנים'}${x.service==='מושהה'?' · שירות מושהה':''}</div>${x.notes?`<div class="notes">${x.notes}</div>`:''}${lastChange.has(x.name)&&new Date(lastChange.get(x.name))>dayAgo?`<div class="new">עודכן ${fmt(lastChange.get(x.name))}</div>`:''}</div>`).join('')||'<p class="count">אין תוצאות</p>';
 }
 function stats(){
-  const g=D.guests,by=s=>g.filter(x=>x.status===s),inv=a=>a.reduce((n,x)=>n+x.invited,0),com=a=>a.reduce((n,x)=>n+x.coming,0);
-  const coming=com(by('confirmed')), notComing=inv(by('declined'))+inv(by('confirmed'))-coming, pending=inv(by('pending'));
-  $('stats').innerHTML=[['','מוזמנים',inv(g),g.length+' הזמנות',''],['confirmed','מגיעים',coming,by('confirmed').length+' הזמנות אישרו','ok'],['declined','לא מגיעים',notComing,by('declined').length+' סירבו · '+(notComing-inv(by('declined')))+' חסרים ממשפחות שאישרו','no'],['pending','טרם ענו',pending,by('pending').length+' הזמנות','wait']]
+  const g=D.guests,by=s=>g.filter(x=>x.status===s),sum=(a,f)=>a.reduce((n,x)=>n+f(x),0);
+  const invited=sum(g,x=>x.invited), coming=sum(by('confirmed'),x=>x.coming), extra=sum(by('confirmed'),x=>Math.max(0,x.coming-x.invited));
+  const notComing=sum(by('declined'),x=>x.invited)+sum(by('confirmed'),x=>Math.max(0,x.invited-x.coming)), pending=sum(by('pending'),x=>x.invited);
+  $('stats').innerHTML=[['','אורחים',invited+extra,invited+' הוזמנו'+(extra?' + '+extra+' לא צפויים':'')+' · '+g.length+' הזמנות',''],['confirmed','מגיעים',coming,by('confirmed').length+' הזמנות','ok'],['declined','לא מגיעים',notComing,by('declined').length+' הזמנות סירבו · '+(notComing-sum(by('declined'),x=>x.invited))+' חסרים ממשפחות שאישרו','no'],['pending','טרם עדכנו',pending,by('pending').length+' הזמנות','wait']]
     .map(([s,l,v,sub,c])=>`<div class="stat ${c} ${status===s?'on':''}" data-s="${s}"><b>${v}</b><small>${l}</small><small class="sub2">${sub}</small></div>`).join('');
   $('stats').querySelectorAll('.stat').forEach(e=>e.onclick=()=>{status=e.dataset.s;stats();render()});
 }

@@ -3,7 +3,7 @@ import fs from 'node:fs'; import { execSync } from 'node:child_process'; import 
 const dir = new URL('.', import.meta.url).pathname; process.chdir(dir);
 const src = process.argv[2]; if (!src) throw new Error('usage: node sync.mjs <rsvp-guests.json>');
 const fresh = JSON.parse(fs.readFileSync(src, 'utf8'));
-if (!Array.isArray(fresh) || fresh.length < 50) throw new Error('refusing: file has ' + (fresh.length ?? 'no') + ' guests'); // guard against a broken download wiping the list
+if (!Array.isArray(fresh) || fresh.length < 100) throw new Error('refusing: file has ' + (fresh.length ?? 'no') + ' guests'); // guard against a broken download wiping the list
 const old = fs.existsSync('guests.json') ? JSON.parse(fs.readFileSync('guests.json', 'utf8')) : [];
 const log = fs.existsSync('changes.json') ? JSON.parse(fs.readFileSync('changes.json', 'utf8')) : [];
 const key = g => g.name + '|' + g.phone, oldBy = new Map(old.map(g => [key(g), g]));
@@ -21,11 +21,12 @@ const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 2000
 const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify({ updatedAt: at, guests: fresh, changes: log.slice(-300) })));
 const b64 = u => Buffer.from(u).toString('base64');
 fs.writeFileSync('data.enc', JSON.stringify({ salt: b64(salt), iv: b64(iv), ct: b64(new Uint8Array(ct)) }));
-const n = s => fresh.filter(g => g.status === s), inv = a => a.reduce((x, g) => x + g.invited, 0), people = n('confirmed').reduce((a, g) => a + g.coming, 0);
-const notComing = inv(n('declined')) + inv(n('confirmed')) - people, pendingPeople = inv(n('pending'));
+const n = s => fresh.filter(g => g.status === s), sum = (a, f) => a.reduce((x, g) => x + f(g), 0);
+const people = sum(n('confirmed'), g => g.coming), extra = sum(n('confirmed'), g => Math.max(0, g.coming - g.invited));
+const notComing = sum(n('declined'), g => g.invited) + sum(n('confirmed'), g => Math.max(0, g.invited - g.coming)), pendingPeople = sum(n('pending'), g => g.invited);
 const he = { confirmed: 'אישרו', declined: 'סירבו', pending: 'טרם ענו' };
 const lines = changes.map(c => `${c.name}: ${c.from ? he[c.from] + ' ← ' : 'חדש: '}${he[c.to]}${c.to === 'confirmed' ? ` (${c.coming})` : ''}`);
-const summary = `מגיעים ${people} אנשים (${n('confirmed').length} הזמנות), לא מגיעים ${notComing}, טרם ענו ${pendingPeople} אנשים (${n('pending').length} הזמנות). שינויים מאז הפעם הקודמת: ${changes.length}${lines.length ? '\n' + lines.join('\n') : ''}`;
+const summary = `מגיעים ${people}, לא מגיעים ${notComing}, טרם עדכנו ${pendingPeople} (מתוך ${sum(fresh, g => g.invited)} מוזמנים${extra ? ' + ' + extra + ' לא צפויים' : ''}). שינויים מאז הפעם הקודמת: ${changes.length}${lines.length ? '\n' + lines.join('\n') : ''}`;
 if (process.argv.includes('--no-git')) { console.log(summary); process.exit(0); }
 execSync('git add data.enc && (git diff --cached --quiet || git commit -qm "rsvp sync ' + at.slice(0, 16) + '") && git push -q', { stdio: 'inherit' });
 console.log(summary);
